@@ -1,0 +1,6 @@
+numpy==1.26.4
+pandas==2.2.2
+ccxt==4.3.46
+tqdm==4.66.4
+scikit-learn==1.4.2
+apscheduler==3.10.4
