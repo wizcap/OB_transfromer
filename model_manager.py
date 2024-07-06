@@ -10,12 +10,27 @@ class ModelManager:
     @staticmethod
     def load_latest_model():
         try:
+            if not os.path.exists(MODEL_DIR):
+                os.makedirs(MODEL_DIR)
+
+            if not os.path.exists(MODEL_VERSION_FILE):
+                with open(MODEL_VERSION_FILE, 'w') as f:
+                    json.dump({'version': 0}, f)
+                logging.info(f"Created new model version file: {MODEL_VERSION_FILE}")
+                return None, None
+
             with open(MODEL_VERSION_FILE, 'r') as f:
                 version = json.load(f)['version']
+
+            if version == 0:
+                logging.info("No trained model found. Starting with a new model.")
+                return None, None
+
             model_path = os.path.join(MODEL_DIR, f'model_v{version}.pth')
 
             if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Model file not found: {model_path}")
+                logging.warning(f"Model file not found: {model_path}")
+                return None, None
 
             checkpoint = torch.load(model_path, map_location=DEVICE)
             model = ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)

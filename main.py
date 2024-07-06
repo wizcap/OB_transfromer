@@ -2,6 +2,8 @@ import logging
 import threading
 from scheduler import start_scheduler
 from train import retrain_model
+import os
+from config import MODEL_DIR, DATA_DIR
 
 # 设置日志
 logging.basicConfig(level=logging.INFO,
@@ -22,6 +24,9 @@ def user_input_handler():
 
 
 def main():
+    # 确保必要的目录存在
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     logging.info("程序开始执行")
     try:
         # 启动用户输入处理线程
