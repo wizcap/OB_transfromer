@@ -5,7 +5,7 @@ from datetime import datetime
 from model_manager import ModelManager
 from data_collector import DataCollector
 from config import DEVICE, SYMBOL, TREND_THRESHOLD
-from database import db
+from database import db, close_db
 
 
 def run_prediction():
@@ -79,6 +79,8 @@ def run_prediction():
     except Exception as e:
         logging.error(f"预测过程中发生错误: {str(e)}", exc_info=True)
         return None
+    finally:
+        close_db()
 
 
 def continuous_prediction(interval=300):  # 默认每5分钟预测一次

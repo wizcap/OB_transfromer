@@ -1,6 +1,6 @@
 import logging
 import threading
-
+from database import init_db, close_db
 from sklearn.preprocessing import StandardScaler
 
 from scheduler import start_scheduler
@@ -37,6 +37,7 @@ def initialize_base_model():
 
 
 def main():
+    init_db()
     # 确保必要的目录存在
     os.makedirs(MODEL_DIR, exist_ok=True)
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -52,8 +53,11 @@ def main():
         # 启动调度器
         logging.info("开始定时任务...")
         start_scheduler()
+
     except Exception as e:
         logging.error(f"程序执行过程中发生错误: {str(e)}", exc_info=True)
+    finally:
+        close_db()
 
 
 if __name__ == "__main__":
