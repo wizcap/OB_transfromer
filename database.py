@@ -84,11 +84,13 @@ class Database:
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM predictions
+                SELECT id, timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, sma
+                FROM predictions
                 ORDER BY timestamp DESC
                 LIMIT ?
             ''', (limit,))
-            return cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
         except sqlite3.Error as e:
             logging.error(f"Error fetching recent predictions: {e}")
             return []
