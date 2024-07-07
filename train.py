@@ -1,29 +1,44 @@
+# train.py
+
 import torch
 import torch.nn as nn
 import numpy as np
 import logging
 from model_manager import ModelManager
 from data_collector import DataCollector
-from config import DEVICE, BATCH_SIZE, LEARNING_RATE, NUM_EPOCHS, N_SAMPLES, SEQUENCE_LENGTH
+from config import DEVICE, BATCH_SIZE, LEARNING_RATE, NUM_EPOCHS, N_SAMPLES, SEQUENCE_LENGTH, ONLINE_LEARNING_WINDOW, \
+    ONLINE_LEARNING_RATE
+from database import db  # 添加这行
+from tqdm import tqdm
 import os
 
 
 def retrain_model():
     logging.info("开始重新训练模型...")
     try:
+        logging.info("尝试加载基础模型...")
         model = ModelManager.load_base_model()
+        logging.info("模型加载/初始化完成")
+
         data_collector = DataCollector()
 
         logging.info(f"开始收集训练数据，共 {N_SAMPLES} 个样本...")
         train_data = data_collector.collect_train_data(N_SAMPLES, SEQUENCE_LENGTH)
-        logging.info("训练数据收集完成")
 
-        if not train_data:
+        if train_data is None or len(train_data) == 0:
             logging.error("没有收集到训练数据")
             return
 
+        logging.info(f"收集到 {len(train_data)} 个训练样本")
+
         train_data = np.array(train_data)
+        logging.info(f"训练数据形状: {train_data.shape}")
+
         scaler = data_collector.get_scaler()
+        if scaler is None:
+            logging.error("无法获取 scaler")
+            return
+
         train_data_flat = train_data.reshape(-1, train_data.shape[-1])
         train_data_scaled = scaler.fit_transform(train_data_flat).reshape(train_data.shape)
 
@@ -32,10 +47,16 @@ def retrain_model():
 
         logging.info(f"开始训练，总共 {NUM_EPOCHS} 个 epochs")
         model.train()
-        for epoch in range(NUM_EPOCHS):
+
+        for epoch in tqdm(range(NUM_EPOCHS), desc="Training Progress"):
             total_loss = 0
             batch_count = 0
-            for i in range(0, len(train_data_scaled), BATCH_SIZE):
+
+            batch_iterator = tqdm(range(0, len(train_data_scaled), BATCH_SIZE),
+                                  desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}",
+                                  leave=False)
+
+            for i in batch_iterator:
                 batch = train_data_scaled[i:i + BATCH_SIZE]
                 if len(batch) < 2:  # 确保至少有两个样本来计算差异
                     continue
@@ -51,13 +72,15 @@ def retrain_model():
                 total_loss += loss.item()
                 batch_count += 1
 
+                batch_iterator.set_postfix({"Loss": f"{loss.item():.4f}"})
+
             if batch_count > 0:
                 avg_loss = total_loss / batch_count
-                logging.info(f'Epoch [{epoch + 1}/{NUM_EPOCHS}], Loss: {avg_loss:.4f}')
+                logging.info(f'Epoch [{epoch + 1}/{NUM_EPOCHS}], Average Loss: {avg_loss:.4f}')
             else:
                 logging.warning(f'Epoch [{epoch + 1}/{NUM_EPOCHS}], No valid batches')
 
-        ModelManager.save_model(model, scaler)
+        ModelManager.save_model(model, scaler, is_best=False, is_base=False)
         logging.info("模型重新训练完成并保存")
 
     except Exception as e:

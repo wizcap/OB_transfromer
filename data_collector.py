@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import EXCHANGE, SYMBOL, ORDERBOOK_LIMIT, SEQUENCE_LENGTH
 import logging
+import tqdm
 
 
 class DataCollector:
@@ -63,6 +64,22 @@ class DataCollector:
                 [bid_ask_spread, volume_imbalance, bid_price_slope, ask_price_slope, bid_depth, ask_depth, mid_price])
 
         return np.array(features)
+
+    def collect_train_data(self, n_samples, sequence_length):
+        train_data = []
+        for _ in tqdm(range(n_samples), desc="Collecting training data"):
+            sample, _ = self.prepare_data(sequence_length)
+            if sample is not None:
+                train_data.append(sample)
+            else:
+                logging.warning("获取样本失败，跳过")
+
+        if not train_data:
+            logging.error("没有收集到有效的训练数据")
+            return None
+
+        logging.info(f"成功收集了 {len(train_data)} 个训练样本")
+        return train_data
 
     def prepare_data(self):
         data = []

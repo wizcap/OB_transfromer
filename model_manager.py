@@ -47,50 +47,57 @@ class ModelManager:
     def load_base_model():
         base_model_path = os.path.join(MODEL_DIR, 'base_model.pth')
         if os.path.exists(base_model_path):
+            logging.info(f"Loading base model from {base_model_path}")
             checkpoint = torch.load(base_model_path, map_location=DEVICE)
             model = ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)
             model.load_state_dict(checkpoint['model_state_dict'])
+            logging.info("Base model loaded successfully")
             return model
         else:
-            logging.warning("Base model not found. Initializing new model.")
-            return ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)
+            logging.warning(f"Base model not found at {base_model_path}. Initializing new model.")
+            model = ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)
+            logging.info("New model initialized")
+            return model
 
     @staticmethod
-    def save_model(model, scaler, is_best=False):
+    def save_model(model, scaler, is_best=False, is_base=False):
         try:
             if not os.path.exists(MODEL_DIR):
                 os.makedirs(MODEL_DIR)
 
-            with open(MODEL_VERSION_FILE, 'r') as f:
-                version_info = json.load(f)
-                current_version = version_info['version']
+            if is_base:
+                model_path = os.path.join(MODEL_DIR, 'base_model.pth')
+            else:
+                with open(MODEL_VERSION_FILE, 'r') as f:
+                    version_info = json.load(f)
+                    current_version = version_info['version']
 
-            new_version = current_version + 1
-            model_filename = f'model_v{new_version}.pth'
-            model_path = os.path.join(MODEL_DIR, model_filename)
+                new_version = current_version + 1
+                model_filename = f'model_v{new_version}.pth'
+                model_path = os.path.join(MODEL_DIR, model_filename)
 
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'scaler': scaler,
-                'version': new_version
             }, model_path)
 
-            with open(MODEL_VERSION_FILE, 'w') as f:
-                json.dump({'version': new_version}, f)
+            if is_base:
+                logging.info(f"保存基础模型: {model_path}")
+            else:
+                with open(MODEL_VERSION_FILE, 'w') as f:
+                    json.dump({'version': new_version}, f)
+                logging.info(f"保存模型版本 {new_version}")
 
             if is_best:
                 best_model_path = os.path.join(MODEL_DIR, 'best_model.pth')
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'scaler': scaler,
-                    'version': new_version
                 }, best_model_path)
-                logging.info(f"Saved new best model: {best_model_path}")
+                logging.info(f"保存新的最佳模型: {best_model_path}")
 
-            logging.info(f"Saved model version {new_version}")
-            ModelManager.cleanup_old_models()
         except Exception as e:
-            logging.error(f"Error saving model: {str(e)}")
+            logging.error(f"保存模型时发生错误: {str(e)}")
 
     @staticmethod
     def cleanup_old_models():
