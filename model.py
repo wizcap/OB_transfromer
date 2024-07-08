@@ -27,7 +27,10 @@ class ImprovedOrderbookTransformer(nn.Module):
         self.feature_extractor = nn.Sequential(
             nn.Linear(input_dim, d_model),
             nn.ReLU(),
-            nn.Linear(d_model, d_model)
+            nn.Dropout(dropout),
+            nn.Linear(d_model, d_model),
+            nn.ReLU(),
+            nn.Dropout(dropout)
         )
         self.pos_encoder = PositionalEncoding(d_model)
         encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, batch_first=True)
@@ -35,7 +38,9 @@ class ImprovedOrderbookTransformer(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
             nn.ReLU(),
-            nn.Linear(d_model // 2, output_dim)
+            nn.Dropout(dropout),
+            nn.Linear(d_model // 2, output_dim),
+            nn.Tanh()  # 使用tanh函数限制输出范围在[-1, 1]之间
         )
         self.dropout = nn.Dropout(dropout)
 

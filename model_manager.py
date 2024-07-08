@@ -2,6 +2,9 @@ import torch
 import os
 import json
 import logging
+
+from sklearn.preprocessing import StandardScaler
+
 from config import MODEL_DIR, MODEL_VERSION_FILE, MAX_MODELS_KEPT, DEVICE
 from model import ImprovedOrderbookTransformer, INPUT_DIM, MODEL_CONFIG
 
@@ -34,8 +37,18 @@ class ModelManager:
 
             checkpoint = torch.load(model_path, map_location=DEVICE)
             model = ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            scaler = checkpoint['scaler']
+
+            # 尝试加载模型参数，忽略不匹配的键
+            model_dict = model.state_dict()
+            pretrained_dict = {k: v for k, v in checkpoint['model_state_dict'].items() if k in model_dict}
+            model_dict.update(pretrained_dict)
+            model.load_state_dict(model_dict, strict=False)
+
+            scaler = StandardScaler()
+            if checkpoint['scaler_state'] is not None:
+                scaler.__setstate__(checkpoint['scaler_state'])
+            else:
+                logging.warning("Scaler state not found in checkpoint, using uninitialized scaler.")
 
             logging.info(f"Loaded model version {version}")
             return model, scaler
@@ -60,41 +73,49 @@ class ModelManager:
             return model
 
     @staticmethod
-    def save_model(model, scaler, is_best=False, is_base=False):
+    def save_model(model, scaler, is_best=False, is_new=False, is_base=False):
         try:
             if not os.path.exists(MODEL_DIR):
                 os.makedirs(MODEL_DIR)
 
-            if is_base:
-                model_path = os.path.join(MODEL_DIR, 'base_model.pth')
+            if is_new:
+                version = 1
             else:
                 with open(MODEL_VERSION_FILE, 'r') as f:
                     version_info = json.load(f)
-                    current_version = version_info['version']
+                    version = version_info['version'] + 1
 
-                new_version = current_version + 1
-                model_filename = f'model_v{new_version}.pth'
-                model_path = os.path.join(MODEL_DIR, model_filename)
+            model_filename = f'model_v{version}.pth'
+            model_path = os.path.join(MODEL_DIR, model_filename)
 
             torch.save({
                 'model_state_dict': model.state_dict(),
-                'scaler': scaler,
+                'scaler_state': scaler.__getstate__() if scaler is not None else None,
+                'version': version
             }, model_path)
 
-            if is_base:
-                logging.info(f"保存基础模型: {model_path}")
-            else:
-                with open(MODEL_VERSION_FILE, 'w') as f:
-                    json.dump({'version': new_version}, f)
-                logging.info(f"保存模型版本 {new_version}")
+            with open(MODEL_VERSION_FILE, 'w') as f:
+                json.dump({'version': version}, f)
+
+            logging.info(f"Saved model version {version}")
 
             if is_best:
                 best_model_path = os.path.join(MODEL_DIR, 'best_model.pth')
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'scaler': scaler,
+                    'version': version
                 }, best_model_path)
-                logging.info(f"保存新的最佳模型: {best_model_path}")
+                logging.info(f"Saved new best model: {best_model_path}")
+
+            if is_base:
+                base_model_path = os.path.join(MODEL_DIR, 'base_model.pth')
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'scaler': scaler,
+                    'version': version
+                }, base_model_path)
+                logging.info(f"Saved base model: {base_model_path}")
 
         except Exception as e:
             logging.error(f"保存模型时发生错误: {str(e)}")

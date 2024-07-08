@@ -1,3 +1,5 @@
+import ccxt
+import numpy as np
 import torch
 import logging
 import time
@@ -7,21 +9,30 @@ from data_collector import DataCollector
 from config import DEVICE, SYMBOL, TREND_THRESHOLD
 from database import db, close_db
 
+exchange = ccxt.binance({
+    'enableRateLimit': True,
+    'options': {
+        'defaultType': 'future'  # 使用期货市场
+    }
+})
+
 
 def run_prediction():
     logging.info("开始预测...")
     try:
-        # 加载最新模型
         model, scaler = ModelManager.load_latest_model()
         if model is None or scaler is None:
             logging.error("无法加载模型，预测失败")
-            return
+            return None
 
         data_collector = DataCollector()
-        exchange = data_collector.get_exchange()
-
-        # 准备预测数据
         data, _ = data_collector.prepare_data()
+
+        if not hasattr(scaler, 'n_features_in_'):
+            logging.warning("Scaler not fitted, fitting with current data")
+            scaler.fit(data)
+            ModelManager.save_model(model, scaler)  # 保存拟合后的scaler
+
         data_scaled = scaler.transform(data)
 
         # 进行预测
@@ -29,6 +40,10 @@ def run_prediction():
         with torch.no_grad():
             input_tensor = torch.FloatTensor(data_scaled).unsqueeze(0).to(DEVICE)
             prediction = model(input_tensor).item()
+
+        if not np.isfinite(prediction):
+            logging.error(f"预测结果无效: {prediction}")
+            return None
 
         logging.info(f"预测的价格变动: {prediction:.4f}")
 
@@ -71,8 +86,11 @@ def run_prediction():
             'sma': sma
         }
 
-        db.save_prediction(result)
-        logging.info("预测结果已保存")
+        if all(np.isfinite(value) for value in result.values() if isinstance(value, (int, float))):
+            db.save_prediction(result)
+            logging.info("预测结果已保存")
+        else:
+            logging.error("预测结果包含无效值，未保存")
 
         return result
 

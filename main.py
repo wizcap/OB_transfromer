@@ -36,12 +36,21 @@ def initialize_base_model():
         logging.info("基础模型已初始化并保存")
 
 
+def initialize_new_model():
+    logging.info("Initializing new model...")
+    model = ImprovedOrderbookTransformer(INPUT_DIM, **MODEL_CONFIG).to(DEVICE)
+    scaler = StandardScaler()
+    ModelManager.save_model(model, scaler, is_new=True)
+    logging.info("New model initialized and saved")
+
+
 def main():
     init_db()
     # 确保必要的目录存在
     os.makedirs(MODEL_DIR, exist_ok=True)
     os.makedirs(DATA_DIR, exist_ok=True)
-
+    # 初始化新模型
+    initialize_new_model()
     # 初始化基础模型
     initialize_base_model()
     logging.info("程序开始执行")
