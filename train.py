@@ -114,19 +114,29 @@ def update_model_with_predictions():
         # 准备在线学习数据
         inputs = []
         targets = []
+        data_collector = DataCollector()
         for i in range(len(recent_predictions) - 1):
             current_pred = recent_predictions[i]
             next_pred = recent_predictions[i + 1]
 
-            input_data = [
-                current_pred['current_price'],
-                current_pred['predicted_change'],
-                current_pred['sma']
-            ]
-            inputs.append(input_data)
+            # 获取完整的输入数据
+            full_input = data_collector.fetch_orderbook()
+            if full_input is None:
+                logging.warning(f"无法获取订单簿数据，跳过样本 {i}")
+                continue
+
+            # 添加额外特征
+            additional_features = data_collector.calculate_additional_features([full_input])[0]
+            full_input = np.concatenate([full_input, additional_features])
+
+            inputs.append(full_input)
 
             actual_change = next_pred['current_price'] - current_pred['current_price']
             targets.append(actual_change)
+
+        if not inputs:
+            logging.error("没有有效的输入数据进行在线学习")
+            return
 
         inputs = np.array(inputs)
         targets = np.array(targets)
@@ -143,7 +153,7 @@ def update_model_with_predictions():
         targets_tensor = torch.FloatTensor(targets).to(DEVICE)
 
         optimizer.zero_grad()
-        outputs = model(inputs_tensor)
+        outputs = model(inputs_tensor.unsqueeze(1))  # 添加时间维度
         loss = criterion(outputs.squeeze(), targets_tensor)
         loss.backward()
         optimizer.step()
