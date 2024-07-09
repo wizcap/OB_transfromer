@@ -34,7 +34,7 @@ class Database:
                     predicted_price REAL NOT NULL,
                     market_price REAL NOT NULL,
                     prediction_trend TEXT NOT NULL,
-                    sma REAL NOT NULL
+                    xgboost_predicted_price REAL NOT NULL
                 )
             ''')
             conn.commit()
@@ -50,7 +50,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO predictions 
-                (timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, sma)
+                (timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, xgboost_predicted_price)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 prediction_data['timestamp'],
@@ -59,7 +59,7 @@ class Database:
                 prediction_data['predicted_price'],
                 prediction_data['market_price'],
                 prediction_data['prediction_trend'],
-                prediction_data['sma']
+                prediction_data['xgboost_predicted_price']
             ))
             conn.commit()
             logging.info(f"Prediction saved: {prediction_data['timestamp']}")
@@ -84,7 +84,7 @@ class Database:
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, sma
+                SELECT id, timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, knn_predicted_price
                 FROM predictions
                 ORDER BY timestamp DESC
                 LIMIT ?

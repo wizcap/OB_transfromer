@@ -1,20 +1,36 @@
-import ccxt
-import numpy as np
 import torch
-import logging
-import time
+import numpy as np
+import ccxt
 from datetime import datetime
+import logging
 from model_manager import ModelManager
 from data_collector import DataCollector
 from config import DEVICE, SYMBOL, TREND_THRESHOLD
 from database import db, close_db
+from sklearn.preprocessing import StandardScaler
+import xgboost as xgb
 
 exchange = ccxt.binance({
     'enableRateLimit': True,
     'options': {
-        'defaultType': 'future'  # 使用期货市场
+        'defaultType': 'future'
     }
 })
+
+
+def xgboost_prediction(historical_data, n_future=1):
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(historical_data)
+
+    X = np.array([scaled_data[i:i + 5].flatten() for i in range(len(scaled_data) - 5)])
+    y = scaled_data[5:, 0]  # 预测下一个时间点的价格
+
+    model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, seed=123)
+    model.fit(X, y)
+
+    future_X = scaled_data[-5:].flatten().reshape(1, -1)
+    future_price = model.predict(future_X)
+    return scaler.inverse_transform([[future_price[0], 0, 0, 0]])[0][0]
 
 
 def run_prediction():
@@ -31,7 +47,7 @@ def run_prediction():
         if not hasattr(scaler, 'n_features_in_'):
             logging.warning("Scaler not fitted, fitting with current data")
             scaler.fit(data)
-            ModelManager.save_model(model, scaler)  # 保存拟合后的scaler
+            ModelManager.save_model(model, scaler)
 
         data_scaled = scaler.transform(data)
 
@@ -56,19 +72,19 @@ def run_prediction():
         predicted_price = current_price + prediction
         logging.info(f"5分钟后预测的 {SYMBOL} 价格: {predicted_price:.2f}")
 
-        # 获取历史数据进行简单的技术分析
-        ohlcv = exchange.fetch_ohlcv(SYMBOL, '5m', limit=12)  # 获取过去1小时的5分钟K线数据
-        closes = [x[4] for x in ohlcv]
-        sma = sum(closes) / len(closes)
+        # 获取历史数据进行XGBoost预测
+        ohlcv = exchange.fetch_ohlcv(SYMBOL, '5m', limit=30)  # 获取过去150分钟的5分钟K线数据
+        historical_data = np.array([[x[1], x[2], x[3], x[4]] for x in ohlcv])  # 使用开高低收价格
+        xgboost_predicted_price = xgboost_prediction(historical_data)
 
         # 判断预测趋势
-        if prediction > TREND_THRESHOLD and current_price > sma:
+        if prediction > TREND_THRESHOLD and current_price > xgboost_predicted_price:
             trend = "强烈上涨"
-        elif prediction > TREND_THRESHOLD and current_price <= sma:
+        elif prediction > TREND_THRESHOLD and current_price <= xgboost_predicted_price:
             trend = "可能上涨"
-        elif prediction < -TREND_THRESHOLD and current_price < sma:
+        elif prediction < -TREND_THRESHOLD and current_price < xgboost_predicted_price:
             trend = "强烈下跌"
-        elif prediction < -TREND_THRESHOLD and current_price >= sma:
+        elif prediction < -TREND_THRESHOLD and current_price >= xgboost_predicted_price:
             trend = "可能下跌"
         else:
             trend = "横盘整理"
@@ -83,7 +99,7 @@ def run_prediction():
             'predicted_price': predicted_price,
             'market_price': exchange.fetch_ticker(SYMBOL)['last'],
             'prediction_trend': trend,
-            'sma': sma
+            'xgboost_predicted_price': xgboost_predicted_price
         }
 
         if all(np.isfinite(value) for value in result.values() if isinstance(value, (int, float))):

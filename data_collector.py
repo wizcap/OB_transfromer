@@ -1,11 +1,13 @@
-# data_collector.py
 import torch
 import ccxt
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import EXCHANGE, SYMBOL, ORDERBOOK_LIMIT, SEQUENCE_LENGTH
 import logging
-import tqdm
+import time
+import random
+from ccxt.base.errors import NetworkError, ExchangeError
+from tqdm import tqdm  # 正确导入 tqdm
 
 
 class DataCollector:
@@ -13,18 +15,28 @@ class DataCollector:
         self.exchange = ccxt.binance({
             'enableRateLimit': True,
             'options': {
-                'defaultType': 'future'  # 使用期货市场
+                'defaultType': 'future'
             }
         })
-        self.symbol = 'BTC/USDT'  # Binance期货使用这种格式
+        self.symbol = 'BTC/USDT'
         self.scaler = StandardScaler()
 
     def get_exchange(self):
         return self.exchange
 
+    def fetch_orderbook_with_retry(self, max_retries=5, delay=10):
+        for attempt in range(max_retries):
+            try:
+                return self.exchange.fetch_order_book(self.symbol, ORDERBOOK_LIMIT)
+            except (NetworkError, ExchangeError) as e:
+                if attempt == max_retries - 1:
+                    raise
+                logging.warning(f"获取订单簿失败，尝试 {attempt + 1}/{max_retries}. 错误: {str(e)}")
+                time.sleep(delay + random.uniform(0, 5))
+
     def fetch_orderbook(self):
         try:
-            orderbook = self.exchange.fetch_order_book(self.symbol, ORDERBOOK_LIMIT)
+            orderbook = self.fetch_orderbook_with_retry()
             bids = orderbook['bids']
             asks = orderbook['asks']
 
@@ -73,6 +85,7 @@ class DataCollector:
                 train_data.append(sample)
             else:
                 logging.warning("获取样本失败，跳过")
+            time.sleep(random.uniform(1, 3))  # 随机延迟1-3秒
 
         if not train_data:
             logging.error("没有收集到有效的训练数据")
@@ -88,20 +101,13 @@ class DataCollector:
             if features is None:
                 return None, None
             data.append(features)
+            time.sleep(random.uniform(1, 3))  # 随机延迟1-3秒
         data = np.array(data)
         additional_features = self.calculate_additional_features(data)
         combined_data = np.hstack((data, additional_features))
 
         scaled_data = self.scaler.fit_transform(combined_data)
         return scaled_data, self.scaler
-
-    def collect_train_data(self, n_samples, sequence_length):
-        train_data = []
-        for _ in range(n_samples):
-            sample, _ = self.prepare_data()
-            if sample is not None:
-                train_data.append(sample)
-        return train_data
 
     def collect_validation_data(self):
         data, _ = self.prepare_data()

@@ -1,5 +1,3 @@
-# model.py
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -56,3 +54,6 @@ class ImprovedOrderbookTransformer(nn.Module):
 # 这里我们从配置文件中导入模型配置
 INPUT_DIM = INPUT_DIM
 MODEL_CONFIG = MODEL_CONFIG
+
+# 确保类被正确导出
+__all__ = ['ImprovedOrderbookTransformer', 'INPUT_DIM', 'MODEL_CONFIG']

@@ -38,7 +38,7 @@ def retrain_model():
         train_data = np.array(train_data)
         train_data_flat = train_data.reshape(-1, train_data.shape[-1])
         scaler.fit(train_data_flat)
-        train_data_scaled = scaler.transform(train_data_flat).reshape(train_data.shape)
+        # train_data_scaled = scaler.transform(train_data_flat).reshape(train_data.shape)
 
         logging.info(f"收集到 {len(train_data)} 个训练样本")
 
