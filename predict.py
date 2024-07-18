@@ -9,7 +9,7 @@ from config import DEVICE, SYMBOL, TREND_THRESHOLD
 from database import db, close_db
 from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
-
+import time
 exchange = ccxt.binance({
     'enableRateLimit': True,
     'options': {

@@ -1,5 +1,3 @@
-# evaluate.py
-
 import logging
 from database import db
 from config import TREND_THRESHOLD
@@ -22,8 +20,8 @@ def evaluate_predictions():
 
             # 评估预测是否正确
             if (predicted_trend in ["强烈上涨", "可能上涨"] and actual_change > TREND_THRESHOLD) or \
-               (predicted_trend in ["强烈下跌", "可能下跌"] and actual_change < -TREND_THRESHOLD) or \
-               (predicted_trend == "横盘整理" and abs(actual_change) <= TREND_THRESHOLD):
+                    (predicted_trend in ["强烈下跌", "可能下跌"] and actual_change < -TREND_THRESHOLD) or \
+                    (predicted_trend == "横盘整理" and abs(actual_change) <= TREND_THRESHOLD):
                 correct_predictions += 1
             total_predictions += 1
 

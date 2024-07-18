@@ -84,7 +84,7 @@ class Database:
         try:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, knn_predicted_price
+                SELECT id, timestamp, current_price, predicted_change, predicted_price, market_price, prediction_trend, xgboost_predicted_price
                 FROM predictions
                 ORDER BY timestamp DESC
                 LIMIT ?
@@ -92,7 +92,7 @@ class Database:
             columns = [column[0] for column in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
         except sqlite3.Error as e:
-            logging.error(f"Error fetching recent predictions: {e}")
+            logging.error(f"Error fetching recent predictions: {str(e)}")
             return []
         finally:
             cursor.close()
